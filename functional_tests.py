@@ -29,18 +29,22 @@ class NewVisitorTest(unittest.TestCase):
 
         # The user types "Buy cheese" into a text box
         inputbox.send_keys('Buy cheese')
-
         # When the user hits enter, the page updates, and now the page lists
         # "1: Buy cheese" as an item in the to-do list
         inputbox.send_keys(Keys.ENTER)
         time.sleep(1)
 
+        # There is still a text box inviting the user to add another item.
+        # The user enters "Buy ham"
+        inputbox = self.browser.find_element_by_id('id_new_item')
+        inputbox.send_keys('Buy ham')
+        inputbox.send_keys(Keys.ENTER)
+        time.sleep(1)
+
         table = self.browser.find_element_by_id('id_list_table')
         rows = table.find_elements_by_tag_name('tr')
-        self.assertTrue(
-                any(row.text == '1: Buy cheese' for row in rows),
-                "New to-do item did not appear in table"
-            )
+        self.assertIn('1: Buy cheese', [row.text for row in rows])
+        self.assertIn('2: Buy ham', [row.text for row in rows])
 
         # There is still a text box inviting her to add another item. She enters
         # "Use cheese to make a sandwich"
