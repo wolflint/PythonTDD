@@ -1,7 +1,10 @@
 from django.test import LiveServerTestCase
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import WebDriverException
 import time
+
+MAX_WAIT = 10
 
 class NewVisitorTest(LiveServerTestCase):
 
@@ -16,7 +19,7 @@ class NewVisitorTest(LiveServerTestCase):
         rows = table.find_elements_by_tag_name('tr')
         self.assertIn(row_text, [row.text for row in rows])
 
-    def test_can_start_a_list_and_retrieve_it_later(self):
+    def test_can_start_a_list_for_one_user(self):
         # Testing the home page of the to-do app
         self.browser.get(self.live_server_url)
 
@@ -33,18 +36,21 @@ class NewVisitorTest(LiveServerTestCase):
         )
 
         # The user types "Buy cheese" into a text box
-        inputbox.send_keys('Buy cheese')
         # When the user hits enter, the page updates, and now the page lists
         # "1: Buy cheese" as an item in the to-do list
+        inputbox.send_keys('Buy cheese')
         inputbox.send_keys(Keys.ENTER)
-        time.sleep(1)
+        self.wait_for_row_in_list_table('1: Buy cheese')
 
         # There is still a text box inviting the user to add another item.
         # The user enters "Buy ham"
         inputbox = self.browser.find_element_by_id('id_new_item')
         inputbox.send_keys('Buy ham')
         inputbox.send_keys(Keys.ENTER)
-        time.sleep(1)
+
+        # The page updates again and shows both items on the list
+        self.wait_for_row_in_list_table('2: Buy ham')
+        self.wait_for_row_in_list_table('1: Buy cheese')
 
         table = self.browser.find_element_by_id('id_list_table')
         rows = table.find_elements_by_tag_name('tr')
@@ -55,6 +61,62 @@ class NewVisitorTest(LiveServerTestCase):
         # "Use cheese to make a sandwich"
         self.fail('Finish the test!')
 
+    def test_multiple_users_can_start_lists_at_different_urls(self):
+        # User starts a new to-do list
+        self.browser.get(self.live_server_url)
+        inputbox = self.browser.find_element_by_id('id_new_item')
+        inputbox.send_keys('Buy tennis racket')
+        inputbox.send_keys(Keys.ENTER)
+        self.wait_for_row_in_list_table('1: Buy tennis racket')
+
+        # The user notices that the list has a unique URL.
+        user1_list_url = self.browser.current_url
+        self.assertRegex(user1_list_url, '/lists/.+')
+
+        # User2 visits the site.
+        ## New browser session is opened to make sure that
+        ## User1 information isn't coming through from cookies
+        self.browser.quit()
+        self.browser = webdriver.Firefox()
+
+        # User2 visits the homepage, there is no sign of User1's list
+        self.browser.get(self.live_server_url)
+        page_text = self.browser.find_element_by_tag_name('body').text
+        self.assertNotIn('Buy cheese', page_text)
+        self.assertNotIn('Buy ham', page_text)
+        self.assertNotIn('Buy tennis racket', page_text)
+
+        # User2 starts a new list
+        inputbox = self.browser.find_element_by_id('id_new_item')
+        inputbox.send_keys('Buy milk')
+        inputbox.send_keys(Keys.ENTER)
+        self.wait_for_row_in_list_table('1: Buy milk')
+
+        # User 2 gets a unique URL
+        user2_list_url = self.browser.current_url
+        self.assertRegex(user2_list_url, '/lists/.+')
+        self.assertNotEqual(user2_list_url, user1_list_url)
+
+        # Again, there is not trace of User1's list
+        page_text = self.browser.find_element_by_tag_name('body').text
+        self.assetNotIn('Buy tennis racket', page_text)
+        self.assertIn('Buy milk', page_text)
+
+        # Satisfied, both users go to sleep ZzzzZzzzzZzzz
+
+
+    def wait_for_row_in_list_table(self, row_text):
+        start_time = time.time()
+        while True:
+            try:
+                table = self.browser.find_element_by_id('id_list_table')
+                rows = table.find_elements_by_tag_name('tr')
+                self.assertIn(row_text, [row.text for row in rows])
+                return
+            except (AssertionError, WebDriverException) as e:
+                if time.time() - start_time > MAX_WAIT:
+                    raise # -*- coding: utf-8 -*-
+                time.sleep(0.5)
         # The page updates again, and now displays both items on the list
 
         # The user wonders whether the site will remember the list. Then the user
